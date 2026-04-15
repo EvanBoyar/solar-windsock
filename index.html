@@ -127,8 +127,8 @@ function extension(speed) {
   return Math.max(0.05, Math.min(1, t));
 }
 // Flutter amplitude (px) and frequency (Hz) scale with speed.
-function flutterAmp(speed)  { return 2 + 18 * extension(speed); }
-function flutterFreq(speed) { return 0.6 + 2.2 * extension(speed); }
+function flutterAmp(speed)  { return 2 + 12 * extension(speed); }
+function flutterFreq(speed) { return 0.6 + 5.0 * extension(speed); }
 
 // Build a tapered sock as a series of stripes. Returns SVG path + stripe paths.
 function renderSock(t, speed) {
@@ -139,7 +139,7 @@ function renderSock(t, speed) {
   // Centerline: from pivot, curving from vertical-down (limp) to horizontal (strong wind).
   // Parameter s in [0,1] along the length.
   // Gravity pulls tip down when ext is low; wind pulls it right when ext is high.
-  const N = 24;
+  const N = 60;
   const pts = [];
   for (let i = 0; i <= N; i++) {
     const s = i / N;
@@ -147,8 +147,8 @@ function renderSock(t, speed) {
     const reach = SOCK_LENGTH * (0.35 + 0.65 * ext);
     const drop  = SOCK_LENGTH * (0.9 * (1 - ext)) * Math.pow(s, 1.6);
     const x = PIVOT_X + reach * s;
-    // Flutter: traveling wave along the sock, amplitude grows toward the tip.
-    const wave = Math.sin((s * 6 - t * freq) * Math.PI * 2) * amp * s;
+    // Flutter: gentle traveling wave along the sock, amplitude grows toward the tip.
+    const wave = Math.sin((s * 2 - t * freq) * Math.PI * 2) * amp * s;
     const y = PIVOT_Y + drop + wave * (0.3 + 0.7 * ext);
     pts.push({ s, x, y });
   }
@@ -268,8 +268,18 @@ async function fetchData() {
   }
 }
 
-fetchData();
-setInterval(fetchData, 60_000);
+// Dev override: ?speed=700 pins the windsock to a given speed and skips fetching.
+const override = new URLSearchParams(location.search).get('speed');
+if (override !== null && Number.isFinite(parseFloat(override))) {
+  const v = parseFloat(override);
+  targetSpeed = v;
+  currentSpeed = v;
+  speedEl.textContent = v.toFixed(0);
+  statusEl.textContent = `Preview mode: speed pinned to ${v} km/s`;
+} else {
+  fetchData();
+  setInterval(fetchData, 60_000);
+}
 </script>
 </body>
 </html>
