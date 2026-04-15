@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solar Windsock</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b1020;
+    --bg2: #1a1f3a;
+    --fg: #e8ecf8;
+    --dim: #8a93b5;
+    --accent: #ffb347;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--fg);
+    background:
+      radial-gradient(ellipse at 20% 10%, #2a1b4a 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 90%, #1a3a5a 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0 0 8px;
+  }
+  .stage {
+    width: min(90vw, 720px);
+    aspect-ratio: 16 / 9;
+  }
+  .readout {
+    display: flex;
+    gap: 48px;
+    margin-top: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat { text-align: center; }
+  .stat .label {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+  .stat .value { font-size: 28px; font-weight: 600; }
+  .stat .unit { font-size: 13px; color: var(--dim); margin-left: 4px; }
+  .status {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--dim);
+    min-height: 1em;
+  }
+  .pole { stroke: #6b7280; stroke-width: 4; stroke-linecap: round; }
+  .sock-band {
+    stroke: #7a1f1f;
+    stroke-width: 0.5;
+    stroke-linejoin: round;
+  }
+</style>
+</head>
+<body>
+  <h1>Solar Windsock</h1>
+  <svg class="stage" viewBox="0 0 640 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <!-- ground -->
+    <line x1="20" y1="320" x2="620" y2="320" stroke="#2a3555" stroke-width="1"/>
+    <!-- pole -->
+    <line class="pole" x1="120" y1="320" x2="120" y2="110"/>
+    <!-- crossbar ring -->
+    <circle cx="120" cy="110" r="6" fill="none" stroke="#6b7280" stroke-width="2"/>
+    <!-- windsock bands -->
+    <g id="sock"></g>
+  </svg>
+
+  <div class="readout">
+    <div class="stat">
+      <div class="label">Solar Wind</div>
+      <div><span class="value" id="speed">—</span><span class="unit">km/s</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Density</div>
+      <div><span class="value" id="density">—</span><span class="unit">p/cm³</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Kp Index</div>
+      <div><span class="value" id="kp">—</span></div>
+    </div>
+  </div>
+  <div class="status" id="status">Loading…</div>
+
+<script>
+const PLASMA_URL = 'https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json';
+const KP_URL = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json';
+
+// State: speed in km/s drives flutter; we smoothly interpolate on updates.
+let targetSpeed = 400;
+let currentSpeed = 400;
+
+const sockEl = document.getElementById('sock');
+const speedEl = document.getElementById('speed');
+const densityEl = document.getElementById('density');
+const kpEl = document.getElementById('kp');
+const statusEl = document.getElementById('status');
+
+// Pole tip is at (120, 110). Windsock extends to the right.
+const PIVOT_X = 120;
+const PIVOT_Y = 110;
+const SOCK_LENGTH = 260; // max extent in px
+const MOUTH_RADIUS = 28;
+const THROAT_RADIUS = 12; // far end
+
+// Map speed (km/s) to an "extension" 0..1 (how horizontal the sock is).
+// ~250 = limp, ~800 = fully extended.
+function extension(speed) {
+  const t = (speed - 250) / (650);
+  return Math.max(0.05, Math.min(1, t));
+}
+// Flutter amplitude (px) and frequency (Hz) scale with speed.
+function flutterAmp(speed)  { return 2 + 18 * extension(speed); }
+function flutterFreq(speed) { return 0.6 + 2.2 * extension(speed); }
+
+// Build a tapered sock as a series of stripes. Returns SVG path + stripe paths.
+function renderSock(t, speed) {
+  const ext = extension(speed);
+  const amp = flutterAmp(speed);
+  const freq = flutterFreq(speed);
+
+  // Centerline: from pivot, curving from vertical-down (limp) to horizontal (strong wind).
+  // Parameter s in [0,1] along the length.
+  // Gravity pulls tip down when ext is low; wind pulls it right when ext is high.
+  const N = 24;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const s = i / N;
+    // Horizontal reach grows with ext; vertical drop shrinks with ext.
+    const reach = SOCK_LENGTH * (0.35 + 0.65 * ext);
+    const drop  = SOCK_LENGTH * (0.9 * (1 - ext)) * Math.pow(s, 1.6);
+    const x = PIVOT_X + reach * s;
+    // Flutter: traveling wave along the sock, amplitude grows toward the tip.
+    const wave = Math.sin((s * 6 - t * freq) * Math.PI * 2) * amp * s;
+    const y = PIVOT_Y + drop + wave * (0.3 + 0.7 * ext);
+    pts.push({ s, x, y });
+  }
+
+  // Build stripe polygons perpendicular to centerline.
+  // Radius tapers from MOUTH_RADIUS at s=0 to THROAT_RADIUS at s=1.
+  function radiusAt(s) { return MOUTH_RADIUS + (THROAT_RADIUS - MOUTH_RADIUS) * s; }
+
+  // Precompute perpendicular offsets for each point.
+  // Near the mouth we blend toward a purely vertical offset, because the
+  // rigid hoop at the opening is viewed edge-on and should always span
+  // (PIVOT_Y - r) to (PIVOT_Y + r), regardless of the sock's tangent.
+  const offsets = pts.map((p, i) => {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // Pick the "top" side consistently (negative-y side of the tangent).
+    let nx = dy / len;
+    let ny = -dx / len;
+    // Blend from vertical (at the mouth) to natural perpendicular along the body.
+    const blend = Math.min(1, p.s / 0.2);
+    nx = nx * blend;
+    ny = ny * blend + (-1) * (1 - blend);
+    const nlen = Math.hypot(nx, ny) || 1;
+    nx /= nlen; ny /= nlen;
+    const r = radiusAt(p.s);
+    return { nx, ny, r };
+  });
+
+  // 6 stripes alternating red/white.
+  const STRIPES = 6;
+  const colors = ['#c62828', '#f5f5f5'];
+  let html = '';
+  for (let k = 0; k < STRIPES; k++) {
+    const s0 = k / STRIPES;
+    const s1 = (k + 1) / STRIPES;
+    const i0 = Math.round(s0 * N);
+    const i1 = Math.round(s1 * N);
+    let topPts = [];
+    let botPts = [];
+    for (let i = i0; i <= i1; i++) {
+      const p = pts[i];
+      const o = offsets[i];
+      topPts.push([p.x + o.nx * o.r, p.y + o.ny * o.r]);
+      botPts.push([p.x - o.nx * o.r, p.y - o.ny * o.r]);
+    }
+    const coords = topPts.concat(botPts.reverse()).map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+    html += `<polygon class="sock-band" points="${coords}" fill="${colors[k % 2]}"/>`;
+  }
+  // Mouth hoop: viewed edge-on, a thin vertical ellipse at the pivot.
+  html += `<ellipse cx="${PIVOT_X}" cy="${PIVOT_Y}" rx="3" ry="${MOUTH_RADIUS}" fill="#1a0505" opacity="0.5"/>`;
+  html += `<ellipse cx="${PIVOT_X}" cy="${PIVOT_Y}" rx="3" ry="${MOUTH_RADIUS}" fill="none" stroke="#555" stroke-width="1.25"/>`;
+
+  sockEl.innerHTML = html;
+}
+
+let lastFrame = performance.now();
+function animate(now) {
+  const dt = (now - lastFrame) / 1000;
+  lastFrame = now;
+  // Smoothly interpolate displayed speed toward target.
+  currentSpeed += (targetSpeed - currentSpeed) * Math.min(1, dt * 0.8);
+  renderSock(now / 1000, currentSpeed);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame((t) => { lastFrame = t; animate(t); });
+
+// --- Data fetching ---
+
+function parseTable(rows) {
+  const header = rows[0];
+  return rows.slice(1).map(r => Object.fromEntries(header.map((h, i) => [h, r[i]])));
+}
+
+function lastValid(records, key) {
+  for (let i = records.length - 1; i >= 0; i--) {
+    const v = parseFloat(records[i][key]);
+    if (Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+async function fetchData() {
+  try {
+    const [plasmaRes, kpRes] = await Promise.all([
+      fetch(PLASMA_URL, { cache: 'no-store' }),
+      fetch(KP_URL, { cache: 'no-store' }),
+    ]);
+    if (!plasmaRes.ok) throw new Error('plasma ' + plasmaRes.status);
+    if (!kpRes.ok) throw new Error('kp ' + kpRes.status);
+    const plasmaRaw = await plasmaRes.json();
+    const kpRaw = await kpRes.json();
+    // Plasma is [headers, ...rows]; Kp is an array of objects.
+    const plasma = parseTable(plasmaRaw);
+    const kp = Array.isArray(kpRaw) && kpRaw.length && Array.isArray(kpRaw[0])
+      ? parseTable(kpRaw)
+      : kpRaw;
+
+    const speed = lastValid(plasma, 'speed');
+    const density = lastValid(plasma, 'density');
+    // Kp product uses "Kp" or "kp_index" depending on endpoint; try both.
+    const kpVal = lastValid(kp, 'Kp') ?? lastValid(kp, 'kp_index') ?? lastValid(kp, 'estimated_kp');
+
+    if (speed != null) {
+      targetSpeed = speed;
+      speedEl.textContent = speed.toFixed(0);
+    }
+    if (density != null) densityEl.textContent = density.toFixed(1);
+    if (kpVal != null) kpEl.textContent = kpVal.toFixed(1);
+
+    const when = new Date().toLocaleTimeString();
+    statusEl.textContent = `Updated ${when} · NOAA SWPC`;
+  } catch (err) {
+    statusEl.textContent = `Fetch failed: ${err.message}. Retrying…`;
+  }
+}
+
+fetchData();
+setInterval(fetchData, 60_000);
+</script>
+</body>
+</html>
