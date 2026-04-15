@@ -18,10 +18,7 @@
   body {
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     color: var(--fg);
-    background:
-      radial-gradient(ellipse at 20% 10%, #2a1b4a 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 90%, #1a3a5a 0%, transparent 60%),
-      linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background: #000;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -73,13 +70,131 @@
 <body>
   <h1>Solar Windsock</h1>
   <svg class="stage" viewBox="0 0 640 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <!-- ground -->
-    <line x1="20" y1="320" x2="620" y2="320" stroke="#2a3555" stroke-width="1"/>
-    <!-- pole -->
-    <line class="pole" x1="120" y1="320" x2="120" y2="110"/>
-    <!-- crossbar ring -->
-    <circle cx="120" cy="110" r="6" fill="none" stroke="#6b7280" stroke-width="2"/>
-    <!-- windsock bands -->
+    <defs>
+      <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fff8d0" stop-opacity="1"/>
+        <stop offset="40%" stop-color="#ffd76a" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#ffa500" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="earthOcean" cx="30%" cy="20%" r="90%">
+        <stop offset="0%" stop-color="#6bb4e8"/>
+        <stop offset="45%" stop-color="#2a75c0"/>
+        <stop offset="85%" stop-color="#0e3878"/>
+        <stop offset="100%" stop-color="#061e4a"/>
+      </radialGradient>
+      <radialGradient id="atmGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="85%" stop-color="#9ec8ff" stop-opacity="0"/>
+        <stop offset="92%" stop-color="#9ec8ff" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#9ec8ff" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="earthTerminator" cx="30%" cy="15%" r="110%">
+        <stop offset="55%" stop-color="#000" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.45"/>
+      </radialGradient>
+      <radialGradient id="moonGround" cx="50%" cy="0%" r="100%">
+        <stop offset="0%" stop-color="#8a8578"/>
+        <stop offset="60%" stop-color="#4a4740"/>
+        <stop offset="100%" stop-color="#2a2824"/>
+      </radialGradient>
+      <clipPath id="earthClip">
+        <!-- Clip Earth to above the curved lunar horizon so no sky shows between them -->
+        <path d="M -10 0 L 650 0 L 650 296 Q 320 279 -10 296 Z"/>
+      </clipPath>
+    </defs>
+
+    <!-- Stars (fixed positions for a calm, non-twinkling sky) -->
+    <g fill="#fff">
+      <circle cx="40"  cy="30"  r="0.8"/>
+      <circle cx="90"  cy="70"  r="0.6"/>
+      <circle cx="160" cy="40"  r="1.1"/>
+      <circle cx="220" cy="90"  r="0.7"/>
+      <circle cx="275" cy="25"  r="0.9"/>
+      <circle cx="330" cy="65"  r="0.6"/>
+      <circle cx="380" cy="30"  r="1.2"/>
+      <circle cx="435" cy="80"  r="0.7"/>
+      <circle cx="500" cy="130" r="0.8"/>
+      <circle cx="560" cy="50"  r="1.0"/>
+      <circle cx="605" cy="95"  r="0.6"/>
+      <circle cx="70"  cy="180" r="0.8"/>
+      <circle cx="250" cy="160" r="0.7"/>
+      <circle cx="410" cy="175" r="0.9"/>
+      <circle cx="580" cy="210" r="0.6"/>
+      <circle cx="20"  cy="250" r="0.7"/>
+      <circle cx="150" cy="230" r="0.9"/>
+      <circle cx="320" cy="250" r="0.6"/>
+      <circle cx="485" cy="240" r="0.8"/>
+    </g>
+
+    <!-- Sun (high in the sky, upwind side) with soft glow -->
+    <circle cx="70" cy="55" r="60" fill="url(#sunGlow)"/>
+    <circle cx="70" cy="55" r="22" fill="#fffbe0"/>
+
+    <!-- Earth rising behind the lunar horizon, clipped so only the upper portion shows -->
+    <g clip-path="url(#earthClip)">
+      <!-- Ocean base -->
+      <circle cx="430" cy="305" r="70" fill="url(#earthOcean)"/>
+
+      <!-- Continents: irregular organic shapes in green and arid browns -->
+      <g opacity="0.9">
+        <!-- Large landmass -->
+        <path d="M 388 268 Q 398 260 412 262 Q 424 266 430 274 Q 424 281 412 282 Q 398 280 390 275 Q 384 271 388 268 Z"
+              fill="#3d7a3a"/>
+        <!-- Secondary landmass to the east -->
+        <path d="M 445 255 Q 460 252 472 258 Q 478 265 470 270 Q 458 272 448 268 Q 442 262 445 255 Z"
+              fill="#4a8840"/>
+        <!-- Arid patch -->
+        <path d="M 418 277 Q 432 274 444 279 Q 446 284 435 285 Q 422 284 418 281 Z"
+              fill="#a8804a"/>
+        <!-- Small island chain -->
+        <path d="M 398 250 Q 405 248 411 251 Q 409 255 402 254 Q 397 253 398 250 Z"
+              fill="#3d7a3a"/>
+      </g>
+
+      <!-- Polar ice cap at the top of the visible disc -->
+      <path d="M 400 241 Q 430 236 460 241 Q 455 247 445 248 Q 430 250 415 248 Q 405 247 400 241 Z"
+            fill="#f2f6fd" opacity="0.92"/>
+
+      <!-- Cloud bands: swirling wisps across the face -->
+      <g fill="#ffffff">
+        <path d="M 382 263 Q 410 259 438 264 Q 460 266 476 262 Q 462 270 438 269 Q 410 267 385 269 Q 378 267 382 263 Z"
+              opacity="0.35"/>
+        <path d="M 395 276 Q 418 273 442 278 Q 436 282 418 282 Q 398 280 395 276 Z"
+              opacity="0.28"/>
+        <path d="M 410 252 Q 430 250 450 253 Q 438 256 422 255 Q 412 254 410 252 Z"
+              opacity="0.4"/>
+      </g>
+
+      <!-- Terminator shading: sun is upper-left, so darken toward lower-right -->
+      <circle cx="430" cy="305" r="70" fill="url(#earthTerminator)"/>
+
+      <!-- Inner atmospheric rim -->
+      <circle cx="430" cy="305" r="70" fill="none" stroke="#bcdcff" stroke-width="0.75" opacity="0.5"/>
+    </g>
+    <!-- Outer atmospheric glow sits outside the clip so it can feather into the sky -->
+    <circle cx="430" cy="305" r="74" fill="url(#atmGlow)" clip-path="url(#earthClip)"/>
+
+    <!-- Lunar surface: slightly curved horizon with a subtle gradient -->
+    <path d="M -10 295 Q 320 278 650 295 L 650 360 L -10 360 Z" fill="url(#moonGround)"/>
+    <!-- Craters for texture -->
+    <g fill="#2a2824" opacity="0.7">
+      <ellipse cx="220" cy="332" rx="22" ry="4"/>
+      <ellipse cx="360" cy="345" rx="34" ry="5"/>
+      <ellipse cx="80"  cy="348" rx="18" ry="3.5"/>
+      <ellipse cx="500" cy="338" rx="26" ry="4.5"/>
+    </g>
+    <g fill="#6a6558" opacity="0.6">
+      <ellipse cx="220" cy="330" rx="22" ry="3"/>
+      <ellipse cx="360" cy="343" rx="34" ry="3.5"/>
+      <ellipse cx="500" cy="336" rx="26" ry="3"/>
+    </g>
+    <!-- Horizon line accent -->
+    <path d="M -10 295 Q 320 278 650 295" fill="none" stroke="#9a9588" stroke-width="0.75" opacity="0.6"/>
+
+    <!-- Pole standing on the lunar surface -->
+    <line class="pole" x1="200" y1="291" x2="200" y2="110"/>
+    <!-- Crossbar ring -->
+    <circle cx="200" cy="110" r="6" fill="none" stroke="#6b7280" stroke-width="2"/>
+    <!-- Windsock bands (rendered by JS) -->
     <g id="sock"></g>
   </svg>
 
@@ -114,7 +229,7 @@ const kpEl = document.getElementById('kp');
 const statusEl = document.getElementById('status');
 
 // Pole tip is at (120, 110). Windsock extends to the right.
-const PIVOT_X = 120;
+const PIVOT_X = 200;
 const PIVOT_Y = 110;
 const SOCK_LENGTH = 260; // max extent in px
 const MOUTH_RADIUS = 28;
