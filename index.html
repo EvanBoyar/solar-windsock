@@ -96,6 +96,12 @@
         <stop offset="60%" stop-color="#4a4740"/>
         <stop offset="100%" stop-color="#2a2824"/>
       </radialGradient>
+      <!-- Crater shading: lit floor toward lower-right, shadow toward upper-left (sun side) -->
+      <radialGradient id="craterShade" cx="72%" cy="78%" r="75%">
+        <stop offset="0%"   stop-color="#7a7566"/>
+        <stop offset="55%"  stop-color="#3c3a33"/>
+        <stop offset="100%" stop-color="#14120f"/>
+      </radialGradient>
       <clipPath id="earthClip">
         <!-- Clip Earth to above the curved lunar horizon so no sky shows between them -->
         <path d="M -10 0 L 650 0 L 650 296 Q 320 279 -10 296 Z"/>
@@ -175,17 +181,12 @@
 
     <!-- Lunar surface: slightly curved horizon with a subtle gradient -->
     <path d="M -10 295 Q 320 278 650 295 L 650 360 L -10 360 Z" fill="url(#moonGround)"/>
-    <!-- Craters for texture -->
-    <g fill="#2a2824" opacity="0.7">
-      <ellipse cx="220" cy="332" rx="22" ry="4"/>
-      <ellipse cx="360" cy="345" rx="34" ry="5"/>
-      <ellipse cx="80"  cy="348" rx="18" ry="3.5"/>
-      <ellipse cx="500" cy="338" rx="26" ry="4.5"/>
-    </g>
-    <g fill="#6a6558" opacity="0.6">
-      <ellipse cx="220" cy="330" rx="22" ry="3"/>
-      <ellipse cx="360" cy="343" rx="34" ry="3.5"/>
-      <ellipse cx="500" cy="336" rx="26" ry="3"/>
+    <!-- Craters (shading baked into the gradient) -->
+    <g opacity="0.85">
+      <ellipse cx="220" cy="332" rx="22" ry="4"  fill="url(#craterShade)"/>
+      <ellipse cx="360" cy="345" rx="34" ry="5"  fill="url(#craterShade)"/>
+      <ellipse cx="80"  cy="348" rx="18" ry="3.5" fill="url(#craterShade)"/>
+      <ellipse cx="500" cy="338" rx="26" ry="4.5" fill="url(#craterShade)"/>
     </g>
     <!-- Horizon line accent -->
     <path d="M -10 295 Q 320 278 650 295" fill="none" stroke="#9a9588" stroke-width="0.75" opacity="0.6"/>
