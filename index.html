@@ -62,9 +62,14 @@
   }
   .pole { stroke: #6b7280; stroke-width: 4; stroke-linecap: round; }
   .sock-band {
+    stroke: none;
+  }
+  .sock-outline {
+    fill: none;
     stroke: #7a1f1f;
     stroke-width: 0.5;
     stroke-linejoin: round;
+    stroke-linecap: round;
   }
 </style>
 </head>
@@ -269,7 +274,10 @@ function renderSock(t, speed) {
     let drop = 0;
     if (s > breakS) {
       const past = (s - breakS) / (1 - breakS + 0.001);
-      drop = SOCK_LENGTH * 0.7 * (1 - ext) * past * past;
+      // past^2.5 rather than past²: centerline curvature is 0 at breakS
+      // and ramps smoothly, so the inside-of-bend offset edge doesn't
+      // cusp. Visually very close to past² droop; tip drop matches.
+      drop = SOCK_LENGTH * 0.7 * (1 - ext) * past * past * Math.sqrt(past);
     }
     // Flutter: traveling wave, amplitude grows toward the tip.
     const wave = Math.sin((s * 2 - t * freq) * Math.PI * 2) * amp * s;
@@ -295,7 +303,11 @@ function renderSock(t, speed) {
     let nx = dy / len;
     let ny = -dx / len;
     // Blend from vertical (at the mouth) to natural perpendicular along the body.
-    const blend = Math.min(1, p.s / 0.2);
+    // Smoothstep the blend so its slope is C¹ at the endpoints — a plain
+    // linear ramp has a slope discontinuity at s=0.2 that shows up as a
+    // visible kink on the inside of the bend.
+    const u = Math.min(1, p.s / 0.2);
+    const blend = u * u * (3 - 2 * u);
     nx = nx * blend;
     ny = ny * blend + (-1) * (1 - blend);
     const nlen = Math.hypot(nx, ny) || 1;
@@ -304,26 +316,108 @@ function renderSock(t, speed) {
     return { nx, ny, r };
   });
 
-  // 6 stripes alternating red/white.
-  const STRIPES = 6;
+  const edges = pts.map((p, i) => {
+    const o = offsets[i];
+    return {
+      top: [p.x + o.nx * o.r, p.y + o.ny * o.r],
+      bot: [p.x - o.nx * o.r, p.y - o.ny * o.r],
+    };
+  });
+
+  // On the inside of a sharp bend, r·d(perp)/ds can exceed d(center)/ds, so
+  // the inside edge briefly reflexes (a vertex sits behind its predecessor
+  // along the local tangent). Drop those samples from the polygon so the
+  // outline chords straight across instead of drawing a V-notch. Top and bot
+  // are filtered independently — a reflex on one side shouldn't drop good
+  // samples from the other.
+  const keepTop = new Array(N + 1).fill(true);
+  const keepBot = new Array(N + 1).fill(true);
+  let lastTop = 0, lastBot = 0;
+  for (let i = 1; i <= N; i++) {
+    const tx = pts[i].x - pts[i - 1].x;
+    const ty = pts[i].y - pts[i - 1].y;
+    const dtx = edges[i].top[0] - edges[lastTop].top[0];
+    const dty = edges[i].top[1] - edges[lastTop].top[1];
+    if (dtx * tx + dty * ty > 0) lastTop = i; else keepTop[i] = false;
+    const dbx = edges[i].bot[0] - edges[lastBot].bot[0];
+    const dby = edges[i].bot[1] - edges[lastBot].bot[1];
+    if (dbx * tx + dby * ty > 0) lastBot = i; else keepBot[i] = false;
+  }
+
+  // 5 stripes alternating red/white, starting and ending on red.
+  // Split by arc length so each band has equal visible length even where
+  // the sock sags and the centerline stretches. Use fractional indices and
+  // interpolate so stripe boundaries don't snap between samples as the sock
+  // flutters.
+  const STRIPES = 5;
   const colors = ['#c62828', '#f5f5f5'];
+  const cumLen = [0];
+  for (let i = 1; i <= N; i++) {
+    const dx = pts[i].x - pts[i - 1].x;
+    const dy = pts[i].y - pts[i - 1].y;
+    cumLen.push(cumLen[i - 1] + Math.hypot(dx, dy));
+  }
+  const totalLen = cumLen[N];
+  function fracIndexAtLen(L) {
+    let lo = 0, hi = N;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cumLen[mid] < L) lo = mid + 1; else hi = mid;
+    }
+    if (lo === 0) return 0;
+    const span = cumLen[lo] - cumLen[lo - 1];
+    const t = span > 0 ? (L - cumLen[lo - 1]) / span : 0;
+    return (lo - 1) + t;
+  }
+  function edgeAt(fi) {
+    const i0 = Math.floor(fi);
+    const i1 = Math.min(N, i0 + 1);
+    const t = fi - i0;
+    // Interpolate the top and bottom edge points directly so the boundary
+    // vertex lies on the straight edge connecting the two adjacent samples'
+    // edge points — otherwise the polygon's edge has a tiny kink at every
+    // stripe boundary that reads as a visible cut on curved sections.
+    const e0 = edges[i0], e1 = edges[i1];
+    return {
+      top: [e0.top[0] + (e1.top[0] - e0.top[0]) * t, e0.top[1] + (e1.top[1] - e0.top[1]) * t],
+      bot: [e0.bot[0] + (e1.bot[0] - e0.bot[0]) * t, e0.bot[1] + (e1.bot[1] - e0.bot[1]) * t],
+    };
+  }
   let html = '';
   for (let k = 0; k < STRIPES; k++) {
-    const s0 = k / STRIPES;
-    const s1 = (k + 1) / STRIPES;
-    const i0 = Math.round(s0 * N);
-    const i1 = Math.round(s1 * N);
-    let topPts = [];
-    let botPts = [];
-    for (let i = i0; i <= i1; i++) {
-      const p = pts[i];
-      const o = offsets[i];
-      topPts.push([p.x + o.nx * o.r, p.y + o.ny * o.r]);
-      botPts.push([p.x - o.nx * o.r, p.y - o.ny * o.r]);
+    const fi0 = fracIndexAtLen((k / STRIPES) * totalLen);
+    const fi1 = fracIndexAtLen(((k + 1) / STRIPES) * totalLen);
+    const start = edgeAt(fi0);
+    const end = edgeAt(fi1);
+    // Skip integer samples at the endpoints to avoid duplicate vertices —
+    // duplicates create zero-length edges whose rounded stroke joins render
+    // as visible dots/notches at stripe boundaries and the sock tip.
+    const iStart = Math.floor(fi0) + 1;
+    const iEnd = Math.ceil(fi1) - 1;
+    const topPts = [start.top];
+    const botPts = [start.bot];
+    for (let i = iStart; i <= iEnd; i++) {
+      if (keepTop[i]) topPts.push(edges[i].top);
+      if (keepBot[i]) botPts.push(edges[i].bot);
     }
+    topPts.push(end.top);
+    botPts.push(end.bot);
     const coords = topPts.concat(botPts.reverse()).map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
     html += `<polygon class="sock-band" points="${coords}" fill="${colors[k % 2]}"/>`;
   }
+  // Sock outline: one continuous stroke around the whole sock. Drawn over
+  // the stripe fills so their internal boundaries meet cleanly without
+  // visible per-stripe corner strokes (which used to render as little
+  // notches at the inside of the bend where the stripe-end edge meets
+  // the bot edge at an acute angle).
+  const outlineTop = [edges[0].top];
+  for (let i = 1; i <= N; i++) if (keepTop[i]) outlineTop.push(edges[i].top);
+  const outlineBot = [edges[0].bot];
+  for (let i = 1; i <= N; i++) if (keepBot[i]) outlineBot.push(edges[i].bot);
+  const outlineCoords = outlineTop.concat(outlineBot.reverse())
+    .map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+  html += `<polygon class="sock-outline" points="${outlineCoords}"/>`;
+
   // Mouth hoop: viewed edge-on, a thin vertical ellipse at the pivot.
   html += `<ellipse cx="${PIVOT_X}" cy="${PIVOT_Y}" rx="3" ry="${MOUTH_RADIUS}" fill="#1a0505" opacity="0.5"/>`;
   html += `<ellipse cx="${PIVOT_X}" cy="${PIVOT_Y}" rx="3" ry="${MOUTH_RADIUS}" fill="none" stroke="#555" stroke-width="1.25"/>`;
