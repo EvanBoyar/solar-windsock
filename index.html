@@ -253,18 +253,25 @@ function renderSock(t, speed) {
   const amp = flutterAmp(speed);
   const freq = flutterFreq(speed);
 
-  // Centerline: from pivot, curving from vertical-down (limp) to horizontal (strong wind).
-  // Parameter s in [0,1] along the length.
-  // Gravity pulls tip down when ext is low; wind pulls it right when ext is high.
+  // Realistic windsock: stays straight/horizontal up to a break point, then
+  // sags under gravity. Stronger wind pushes the break point further along.
   const N = 60;
   const pts = [];
+  // breakS: fraction along the sock that stays stiff. At ext=1 the whole
+  // sock is straight; at ext=0 it breaks almost immediately.
+  const breakS = 0.1 + 0.9 * ext;
+  const reach = SOCK_LENGTH * (0.35 + 0.65 * ext);
   for (let i = 0; i <= N; i++) {
     const s = i / N;
-    // Horizontal reach grows with ext; vertical drop shrinks with ext.
-    const reach = SOCK_LENGTH * (0.35 + 0.65 * ext);
-    const drop  = SOCK_LENGTH * (0.9 * (1 - ext)) * Math.pow(s, 1.6);
     const x = PIVOT_X + reach * s;
-    // Flutter: gentle traveling wave along the sock, amplitude grows toward the tip.
+    // Before the break point the sock is nearly horizontal (slight upward
+    // tilt from the hoop). Past it, gravity takes over with a parabolic sag.
+    let drop = 0;
+    if (s > breakS) {
+      const past = (s - breakS) / (1 - breakS + 0.001);
+      drop = SOCK_LENGTH * 0.7 * (1 - ext) * past * past;
+    }
+    // Flutter: traveling wave, amplitude grows toward the tip.
     const wave = Math.sin((s * 2 - t * freq) * Math.PI * 2) * amp * s;
     const y = PIVOT_Y + drop + wave * (0.3 + 0.7 * ext);
     pts.push({ s, x, y });
