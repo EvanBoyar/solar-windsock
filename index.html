@@ -222,7 +222,7 @@
   <div class="status" id="status">Loading…</div>
 
 <script>
-const PLASMA_URL = 'https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json';
+const PLASMA_URL = 'https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json';
 const KP_URL = 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json';
 
 // State: speed in km/s drives flutter; we smoothly interpolate on updates.
@@ -461,14 +461,16 @@ async function fetchData() {
     if (!kpRes.ok) throw new Error('kp ' + kpRes.status);
     const plasmaRaw = await plasmaRes.json();
     const kpRaw = await kpRes.json();
-    // Plasma is [headers, ...rows]; Kp is an array of objects.
-    const plasma = parseTable(plasmaRaw);
+    // Plasma (rtsw_wind_1m) is newest-first objects from several spacecraft;
+    // prefer the operational source (active: true). Kp is an array of objects.
     const kp = Array.isArray(kpRaw) && kpRaw.length && Array.isArray(kpRaw[0])
       ? parseTable(kpRaw)
       : kpRaw;
 
-    const speed = lastValid(plasma, 'speed');
-    const density = lastValid(plasma, 'density');
+    const latest = plasmaRaw.find(r => r.active && Number.isFinite(r.proton_speed))
+                ?? plasmaRaw.find(r => Number.isFinite(r.proton_speed));
+    const speed = latest ? latest.proton_speed : null;
+    const density = latest && Number.isFinite(latest.proton_density) ? latest.proton_density : null;
     // Kp product uses "Kp" or "kp_index" depending on endpoint; try both.
     const kpVal = lastValid(kp, 'Kp') ?? lastValid(kp, 'kp_index') ?? lastValid(kp, 'estimated_kp');
 
